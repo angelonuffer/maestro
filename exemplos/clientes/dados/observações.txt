@@ -1,0 +1,8 @@
+Observações coletadas durante atendimento:
+
+- Alguns clientes solicitaram planos com suporte estendido fora do horário comercial.
+- Há incidentes recorrentes relacionados à integração com o sistema legado (ticket médio elevado).
+- Sugerir análise de churn para clientes com contratos abaixo de 5000 nos últimos 12 meses.
+
+Notas adicionais:
+- Priorizar revisões contratuais para clientes com alto valor de contrato.

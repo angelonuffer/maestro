@@ -1,0 +1,28 @@
+# Configuração do agente de IA
+conexão:
+  # Endpoint da API Google Generative Language (Gemini). Ajuste o modelo conforme necessário.
+  # Usar endpoint de geração de conteúdo v1beta e o modelo gemini-2.5-flash
+  endereço: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+  # Nome da variável de ambiente que contém a chave/secret da API — exemplo: GOOGLE_API_KEY
+  chave: "GEMINI_API_KEY"
+  modelo: "gemini-2.5-flash"
+  limite_passos: 5
+  autenticação:
+    tipo: "api_key" # opções: "api_key" ou "service_account"
+    # observacao: Para usar service account, defina GOOGLE_APPLICATION_CREDENTIALS apontando para o JSON de credenciais.
+
+ferramentas:
+  - arquivos:
+      # Caminho relativo (a partir do diretório do agente) que o agente pode acessar
+      caminho_permitido: "./dados"
+
+solicitação: "solicitação.md"
+
+relatório: "relatório_clientes.html"
+
+# Observações sobre variáveis e execução:
+# - Defina a variável de ambiente especificada em `conexão.chave` (ex.: `GOOGLE_API_KEY`) com a chave
+#   de acesso à API antes de executar o agente. Alternativamente, configure `GOOGLE_APPLICATION_CREDENTIALS`
+#   para usar credenciais de service account (recomendado para ambientes de produção).
+# - O agente só pode acessar arquivos dentro do diretório `ferramenta_sistema_arquivos.caminho_permitido`.
+# - `prompt` aponta para o arquivo Markdown que contém instruções detalhadas.

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório Consolidado de Clientes</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; background-color: #f4f4f4; }
+        .container { max-width: 900px; margin: 20px auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2, h3 { color: #0056b3; }
+        h1 { text-align: center; margin-bottom: 30px; }
+        h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 40px; }
+        h3 { margin-top: 25px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #f8f8f8; }
+        .summary { background-color: #e9f7ef; border-left: 5px solid #007bff; padding: 15px; margin-top: 20px; }
+        .notes { background-color: #fff3cd; border-left: 5px solid #ffc107; padding: 15px; margin-top: 20px; }
+        .recommendations { background-color: #d4edda; border-left: 5px solid #28a745; padding: 15px; margin-top: 20px; }
+        ul { list-style-type: disc; margin-left: 20px; }
+        p { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Relatório Consolidado de Clientes</h1>
+            <p style="text-align: center;"><strong>Data de Geração:</strong> 2024-07-30</p>
+            <div class="summary">
+                <h2>Sumário Executivo</h2>
+                <p>Este relatório apresenta uma visão consolidada da base de clientes, incluindo métricas chave como o número total de clientes, valor total e médio dos contratos, e a distribuição entre clientes ativos e inativos. São destacadas observações importantes e fornecidas recomendações para aprimorar o atendimento e a gestão de clientes.</p>
+            </div>
+        </header>
+
+        <section>
+            <h2>Metodologia</h2>
+            <p>Os dados para este relatório foram extraídos e analisados a partir das seguintes fontes:</p>
+            <ul>
+                <li><code>./dados/clientes.csv</code>: Contém informações detalhadas sobre cada cliente, incluindo ID, nome, e-mail, valor do contrato, data de início e status.</li>
+                <li><code>./dados/observações.txt</code>: Contém anotações e observações relevantes coletadas durante o atendimento e monitoramento.</li>
+            </ul>
+            <p>O processamento envolveu a leitura dos arquivos, cálculo de métricas agregadas e a formatação das informações para apresentação clara e concisa.</p>
+        </section>
+
+        <section>
+            <h2>Tabela de Clientes</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nome</th>
+                        <th>Email</th>
+                        <th>Valor Contrato</th>
+                        <th>Data Início</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>1</td><td>Ana Silva</td><td>ana.silva@exemplo.com</td><td>12000</td><td>2021-02-15</td><td>ativo</td></tr>
+                    <tr><td>2</td><td>Bruno Santos</td><td>bruno.santos@exemplo.com</td><td>8000</td><td>2022-07-01</td><td>ativo</td></tr>
+                    <tr><td>3</td><td>Carla Pereira</td><td>carla.pereira@exemplo.com</td><td>4500</td><td>2020-11-20</td><td>inativo</td></tr>
+                    <tr><td>4</td><td>Diego Almeida</td><td>diego.almeida@exemplo.com</td><td>15000</td><td>2023-01-10</td><td>ativo</td></tr>
+                    <tr><td>5</td><td>Elisa Costa</td><td>elisa.costa@exemplo.com</td><td>6000</td><td>2022-03-05</td><td>ativo</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section>
+            <h2>Análise Agregada</h2>
+            <ul>
+                <li><strong>Número Total de Clientes:</strong> 5</li>
+                <li><strong>Soma Total dos Contratos:</strong> R$ 45.500,00</li>
+                <li><strong>Média do Valor por Contrato:</strong> R$ 9.100,00</li>
+                <li><strong>Clientes Ativos:</strong> 4 (80.00%)</li>
+                <li><strong>Clientes Inativos:</strong> 1 (20.00%)</li>
+            </ul>
+
+            <h3>Top 5 Clientes por Valor de Contrato</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Valor Contrato</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Diego Almeida</td><td>R$ 15.000,00</td></tr>
+                    <tr><td>Ana Silva</td><td>R$ 12.000,00</td></tr>
+                    <tr><td>Bruno Santos</td><td>R$ 8.000,00</td></tr>
+                    <tr><td>Elisa Costa</td><td>R$ 6.000,00</td></tr>
+                    <tr><td>Carla Pereira</td><td>R$ 4.500,00</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="notes">
+            <h2>Observações</h2>
+            <h3>Texto Extraído de <code>observações.txt</code>:</h3>
+            <p>Observações coletadas durante atendimento:</p>
+            <ul>
+                <li>Alguns clientes solicitaram planos com suporte estendido fora do horário comercial.</li>
+                <li>Há incidentes recorrentes relacionados à integração com o sistema legado (ticket médio elevado).</li>
+                <li>Sugerir análise de churn para clientes com contratos abaixo de 5000 nos últimos 12 meses.</li>
+            </ul>
+            <p>Notas adicionais:</p>
+            <ul>
+                <li>Priorizar revisões contratuais para clientes com alto valor de contrato.</li>
+            </ul>
+            <h3>Interpretação:</h3>
+            <p>As observações indicam áreas críticas para aprimoramento no atendimento e na operação. A demanda por suporte estendido sugere a necessidade de flexibilização ou oferta de pacotes premium. Problemas com o sistema legado apontam para a urgência de uma solução de integração mais robusta ou migração, especialmente considerando o custo elevado dos tickets. A sugestão de análise de churn para clientes com contratos de baixo valor é proativa e visa a retenção, enquanto a priorização de clientes de alto valor é crucial para manter a satisfação e lealdade.</p>
+        </section>
+
+        <section class="recommendations">
+            <h2>Recomendações Finais</h2>
+            <ul>
+                <li><strong>Flexibilizar Suporte:</strong> Avaliar a criação de planos de suporte estendido ou a oferta de horários flexíveis para atender à demanda de clientes específicos.</li>
+                <li><strong>Melhorar Integração Legada:</strong> Investir em soluções para otimizar a integração com o sistema legado, reduzindo incidentes e o tempo de resolução dos tickets. Considerar um roadmap para modernização.</li>
+                <li><strong>Análise de Churn Proativa:</strong> Implementar uma análise preditiva de churn focada em clientes com contratos de baixo valor (abaixo de R$5000 nos últimos 12 meses) para identificar e mitigar riscos de perda.</li>
+                <li><strong>Gestão de Clientes de Alto Valor:</strong> Criar um programa de gestão de contas chave para clientes com contratos de alto valor, oferecendo revisões contratuais periódicas, atendimento prioritário e comunicação proativa para garantir a satisfação e retenção.</li>
+                <li><strong>Comunicação Transparente:</strong> Manter uma comunicação clara e proativa com os clientes sobre quaisquer mudanças, melhorias ou intercorrências nos serviços.</li>
+            </ul>
+        </section>
+    </div>
+</body>
+</html>

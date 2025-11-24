@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Orquestrador de agente de IA: lê a configuração, envia instruções ao modelo e executa as ações
     passo-a-passo retornadas pelo modelo.

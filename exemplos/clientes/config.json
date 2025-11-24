@@ -2,6 +2,7 @@
   "conexão": {
     "endereço": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
     "chave": "GEMINI_API_KEY",
+    "plataforma": "Google Gemini",
     "modelo": "gemini-2.5-flash",
     "limite_passos": 5,
     "autenticação": "x-goog-api-key"

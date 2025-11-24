@@ -169,11 +169,46 @@ function Invoke-Model {
     } elseif ($apiKey) {
         $headers['Authorization'] = "Bearer $apiKey"
     }
-    $body = $Payload | ConvertTo-Json -Depth 4 -Compress
-    Write-Log "endpoint raw: '$endpoint'  authType: '$authType'  apiKeyPresent: $([bool]$apiKey)"
+    # Montar corpo da requisição conforme plataforma
+    if ($Cfg.platform -and $Cfg.platform -eq 'Azure OpenAI') {
+        # Para Azure OpenAI, convertemos o payload para o formato de chat: { model, messages: [{role:'user',content:...}] }
+        $messageText = $null
+        if ($Payload -and $Payload.ContainsKey('contents')) {
+            try { $messageText = $Payload.contents[0].parts[0].text } catch { $messageText = $Payload | ConvertTo-Json -Depth 6 -Compress }
+        } else {
+            try { $messageText = $Payload | ConvertTo-Json -Depth 6 -Compress } catch { $messageText = '' }
+        }
+        $modelName = if ($Cfg.model) { $Cfg.model } elseif ($Payload.model) { $Payload.model } else { 'gpt-35-turbo' }
+        $azureBody = @{ model = $modelName; messages = @( @{ role = 'user'; content = $messageText } ) }
+        $body = $azureBody | ConvertTo-Json -Depth 6 -Compress
+    } else {
+        # Default: enviar payload cru (Google Gemini expects its own 'contents' structure when used)
+        $body = $Payload | ConvertTo-Json -Depth 6 -Compress
+    }
+    Write-Log "endpoint raw: '$endpoint'  authType: '$authType'  apiKeyPresent: $([bool]$apiKey)  plataforma: $($Cfg.platform)"
     Write-Log "Enviando requisição ao modelo em $uri..."
     try {
         $resp = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -Body $body -ContentType 'application/json' -ErrorAction Stop
+        # Normalização de resposta por plataforma
+        if ($Cfg.platform -and $Cfg.platform -eq 'Azure OpenAI') {
+            # Esperamos o formato Azure OpenAI com `choices[0].message.content`.
+            $assistantText = $null
+            try { $assistantText = $resp.choices[0].message.content } catch { $assistantText = $null }
+            if ($assistantText) {
+                # Tentar converter o texto retornado em JSON estruturado (status/plan/actions/memory)
+                try {
+                    $parsed = $assistantText | ConvertFrom-Json -ErrorAction Stop
+                    return $parsed
+                } catch {
+                    # Se não for JSON, também retornamos um objeto compatível com o caminho generateContent
+                    $normalized = @{ candidates = @( @{ content = @{ parts = @( @{ text = $assistantText } ) } } ); raw = $resp }
+                    return $normalized
+                }
+            } else {
+                # Nenhum texto detectado; devolve o objeto bruto para inspeção
+                return $resp
+            }
+        }
         return $resp
     } catch {
         # tentar capturar corpo da resposta quando disponível — leitura defensiva para evitar erros adicionais
@@ -334,11 +369,27 @@ $initialPayload = @{
         $ev = Get-Item -Path Env:$($connObj.api_key_var) -ErrorAction SilentlyContinue
         if ($ev) { $connObj.api_key_value = $ev.Value }
     }
+
+    # plataforma (obrigatória): 'Google Gemini' ou 'Azure OpenAI'
+    if ($conn.PSObject.Properties.Match('plataforma').Count -eq 0) {
+        throw "Propriedade 'conexão.plataforma' ausente no arquivo de configuração; use 'Google Gemini' ou 'Azure OpenAI'."
+    }
+    if (-not ($conn.'plataforma' -is [string])) {
+        throw "Propriedade 'conexão.plataforma' inválida: deve ser uma string com o valor 'Google Gemini' ou 'Azure OpenAI'."
+    }
+    $platVal = $conn.'plataforma'
+    if ((@('Google Gemini','Azure OpenAI') -notcontains $platVal)) {
+        throw "Propriedade 'conexão.plataforma' inválida: valor esperado 'Google Gemini' ou 'Azure OpenAI'."
+    }
+    $connObj.platform = $platVal
 }
 
 # Se endpoint não foi fornecido, tente construir a URL com base no modelo (usando v1beta generateContent)
 if (-not $connObj.endpoint -and $connObj.model) {
-    $connObj.endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$($connObj.model):generateContent"
+    # Somente construir endpoint padrão para Google Gemini (Generative Language)
+    if ($connObj.platform -and $connObj.platform -eq 'Google Gemini') {
+        $connObj.endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$($connObj.model):generateContent"
+    }
 }
 
 # Enviar o payload inicial ao modelo e preparar a primeira resposta estrutural para o loop de execução.

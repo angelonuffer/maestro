@@ -8,6 +8,7 @@ conexão:
   modelo: "gemini-2.5-flash"
   limite_passos: 5
   autenticação: "x-goog-api-key" # nome do header que conterá a API key (ex.: "x-goog-api-key")
+  plataforma: "Google Gemini" # opções: "Google Gemini" ou "Azure OpenAI" (obrigatório)
   # Observação: a propriedade `conexão.autenticação` agora deve ser UMA STRING
   # contendo o nome do header usado para enviar a API key. Para autenticação por
   # token Bearer/service account, mantenha `conexão.chave` apontando para a

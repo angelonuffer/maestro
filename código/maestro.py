@@ -38,20 +38,64 @@ except Exception:
 
 
 ORCHESTRATOR_INSTRUCTIONS = """
-    maestro.ps1: orquestrador. POR FAVOR RESPONDA SOMENTE COM JSON VÁLIDO E
-    PURO — SEM MARCAÇÃO Markdown, SEM CODE FENCES (```) , SEM TEXTO ADICIONAL.
-    O JSON deve conter apenas os campos: "status", "plan", "actions" e
-    "memory".
-    Tipos de ação suportados: leia_arquivo (path), finalizar.
-    (O modelo deve retornar o HTML final NA AÇÃO `finalizar` através de
-    `parameters.content`. O orquestrador salvará esse HTML automaticamente no
-    caminho definido em `relatório` no config ou no `parameters.path`
-    fornecido na ação.)
-    O orquestrador executa ações uma a uma, respeita conexao.limite_passos, e
-    fornece arquivos solicitados em base64 quando o modelo usar a ação
-    `leia_arquivo` (um arquivo por ação). O orquestrador só acessa caminhos
-    dentro de ferramentas[*].arquivos.caminho_permitido. Sempre retorne um
-    objeto "memory" atualizado para a próxima conexão.
+        Instruções para o orquestrador (maestro.ps1 / maestro.py).
+
+        Responda SOMENTE com JSON válido e puro — sem Markdown, sem fences de
+        código (```), sem texto explicativo adicional. O JSON de resposta deve
+        conter exatamente os campos a seguir (tipos esperados indicados):
+
+        - "status": string — valores permitidos: "ok" ou "error".
+        - "plan": array — plano de alto nível (pode ficar vazio: []).
+        - "actions": array de objetos — cada ação deve ter pelo menos:
+                {"id": <string|int>, "type": <string>, "description": <string>, "parameters": <objeto>}.
+        - "memory": objeto — estado persistido que será devolvido ao orquestrador
+            e enviado na próxima chamada.
+
+        Tipos de ação suportados e comportamento esperado:
+        - "leia_arquivo": solicita ao orquestrador o conteúdo de um arquivo.
+                * parâmetros esperados: {"path": "caminho/relativo/ou/absoluto"}.
+                * O orquestrador só fornecerá arquivos que estejam dentro do caminho
+                    permitido definido em `ferramentas[*].arquivos.caminho_permitido`.
+                * Somente um arquivo por ação será retornado. O conteúdo será enviado
+                    ao orquestrador em base64, no objeto `attachments` com a chave igual
+                    ao valor de `path` solicitado. Se o arquivo não existir ou estiver
+                    fora da raiz permitida, o valor do attachment será `null`.
+
+        - "finalizar": encerra a execução e pode fornecer o HTML final.
+                * parâmetros aceitos (ordem de preferência):
+                        - "content" (string) — conteúdo HTML final.
+                        - "html" (string) ou "html_content" (string) — alternativas.
+                        - opcional: "path" — caminho onde o orquestrador deve salvar o HTML.
+                * Se nenhum "path" for fornecido, o orquestrador tentará salvar em
+                    `relatório` definido no arquivo de configuração. Se não houver destino
+                    válido, o HTML será recebido mas não será salvo.
+
+        Regras gerais e restrições:
+        - Sempre retorne um objeto "memory" atualizado com o estado necessário
+            para a próxima conexão; o orquestrador reenviará essa memória.
+        - O orquestrador executa ações sequencialmente, respeitando
+            `conexão.limite_passos` (truncará ações se o modelo retornar mais do que
+            o limite). Planeje suas ações de forma concisa.
+        - Para chamadas que usam Google Generative Language (endpoints contendo
+            ":generateContent") o payload pode ser enviado/recebido no formato de
+            candidatos; verifique que o JSON retornado siga o esquema acima.
+        - Não inclua dados binários fora do base64; use base64 quando precisar
+            transmitir conteúdo de arquivos.
+        - As respostas devem ser UTF-8 e conter apenas o JSON solicitado — nada
+            além (sem logs, sem explicações, sem comentários).
+
+        Campos de ação recomendados (exemplo):
+        {"id": "1", "type": "leia_arquivo", "description": "Ler o CSV de
+         clientes", "parameters": {"path": "dados/clientes.csv"}}
+
+        Exceções e erros:
+        - Em caso de erro operacional, retorne {"status": "error", "plan": [],
+            "actions": [], "memory": {"error": "mensagem curta"}}.
+
+        Observação final: seja preciso no uso de paths e parâmetros. O orquestrador
+        segue estritamente as permissões de acesso a arquivos e salvará o HTML
+        final automaticamente quando receber uma ação "finalizar" com
+        `parameters.content` (ou similares).
 """
 
 

@@ -46,8 +46,8 @@ ORCHESTRATOR_INSTRUCTIONS = """
 
         - "status": string — valores permitidos: "ok" ou "error".
         - "plan": array — plano de alto nível (pode ficar vazio: []).
-        - "actions": array de objetos — cada ação deve ter pelo menos:
-                {"id": <string|int>, "type": <string>, "description": <string>, "parameters": <objeto>}.
+        - "action": objeto — ação única a ser executada pelo orquestrador; deve
+            conter ao menos {"id": <string|int>, "type": <string>, "description": <string>, "parameters": <objeto>}.
         - "memory": objeto — estado persistido que será devolvido ao orquestrador
             e enviado na próxima chamada.
 
@@ -73,9 +73,10 @@ ORCHESTRATOR_INSTRUCTIONS = """
         Regras gerais e restrições:
         - Sempre retorne um objeto "memory" atualizado com o estado necessário
             para a próxima conexão; o orquestrador reenviará essa memória.
-        - O orquestrador executa ações sequencialmente, respeitando
-            `conexão.limite_passos` (truncará ações se o modelo retornar mais do que
-            o limite). Planeje suas ações de forma concisa.
+        - O MODELO DEVE RETORNAR UM ÚNICO CAMPO "action" (objeto) por requisição.
+            O orquestrador fará múltiplas requisições até atingir o limite definido
+            em `conexão.limite_passos` (número máximo de requisições). Planeje suas
+            ações de forma concisa e retorne somente uma ação por resposta.
         - Para chamadas que usam Google Generative Language (endpoints contendo
             ":generateContent") o payload pode ser enviado/recebido no formato de
             candidatos; verifique que o JSON retornado siga o esquema acima.
@@ -84,17 +85,15 @@ ORCHESTRATOR_INSTRUCTIONS = """
         - As respostas devem ser UTF-8 e conter apenas o JSON solicitado — nada
             além (sem logs, sem explicações, sem comentários).
 
-        Campos de ação recomendados (exemplo):
-        {"id": "1", "type": "leia_arquivo", "description": "Ler o CSV de
-         clientes", "parameters": {"path": "dados/clientes.csv"}}
+        Exemplo de `action` (objeto):
+        {"id": "1", "type": "leia_arquivo", "description": "Ler o CSV de clientes", "parameters": {"path": "dados/clientes.csv"}}
 
         Exceções e erros:
-        - Em caso de erro operacional, retorne {"status": "error", "plan": [],
-            "actions": [], "memory": {"error": "mensagem curta"}}.
+        - Em caso de erro operacional, retorne {"status": "error", "plan": [], "action": null, "memory": {"error": "mensagem curta"}}.
 
         Observação final: seja preciso no uso de paths e parâmetros. O orquestrador
         segue estritamente as permissões de acesso a arquivos e salvará o HTML
-        final automaticamente quando receber uma ação "finalizar" com
+        final automaticamente quando receber a ação "finalizar" com
         `parameters.content` (ou similares).
 """
 
@@ -325,7 +324,7 @@ def ensure_structured_response(r: Any) -> Dict[str, Any]:
                 except Exception:
                     pass
             # fallback: retornar string em memory.raw_text
-            return {'status': 'ok', 'plan': [], 'actions': [], 'memory': {'raw_text': r}}
+            return {'status': 'ok', 'plan': [], 'action': None, 'memory': {'raw_text': r}}
     if isinstance(r, dict):
         if 'memory' not in r:
             r['memory'] = {}
@@ -334,21 +333,17 @@ def ensure_structured_response(r: Any) -> Dict[str, Any]:
     try:
         return json.loads(json.dumps(r))
     except Exception:
-        return {'status': 'ok', 'plan': [], 'actions': [], 'memory': {}}
+        return {'status': 'ok', 'plan': [], 'action': None, 'memory': {}}
 
 
-def print_action_descriptions(actions: Optional[List[Dict[str, Any]]]) -> None:
-    """Imprime na saída as descrições das ações retornadas pelo modelo.
-
-    Formato simples e legível com id, type e description.
-    """
-    if not actions:
+def print_action_descriptions(action: Optional[Dict[str, Any]]) -> None:
+    """Imprime na saída a descrição de uma única ação (`action`)."""
+    if not action or not isinstance(action, dict):
         return
-    for a in actions:
-        aid = a.get('id')
-        typ = a.get('type')
-        desc = a.get('description')
-        print(f"-- {aid}:{typ}: {desc}")
+    aid = action.get('id')
+    typ = action.get('type')
+    desc = action.get('description')
+    print(f"-- {aid}:{typ}: {desc}")
 
 
 def main():
@@ -400,7 +395,7 @@ def main():
         'config': config,
         'prompt': prompt_text,
         'file_tree': [{'path': e['path'], 'length': e['length'], 'lastWrite': e['lastWrite']} for e in tree],
-        'request': 'Por favor responda com objeto JSON estruturado contendo: status("ok"/"error"), plan:[...], actions:[{id,type,description,parameters}], memory:{}'
+        'request': 'Por favor responda com objeto JSON estruturado contendo: status("ok"/"error"), plan:[...], action:{id,type,description,parameters}, memory:{}'
     }
 
     # monta objeto de conexão a partir das propriedades em português
@@ -482,9 +477,9 @@ def main():
                             resp = parsed2
                         except Exception:
                             write_log('Texto retornado não é JSON válido — armazenando texto em memory.raw_text para continuar.')
-                            resp = {'status': 'ok', 'plan': [], 'actions': [], 'memory': {'raw_text': out_text}}
+                            resp = {'status': 'ok', 'plan': [], 'action': None, 'memory': {'raw_text': out_text}}
                     else:
-                        resp = {'status': 'ok', 'plan': [], 'actions': [], 'memory': {'raw_text': out_text}}
+                        resp = {'status': 'ok', 'plan': [], 'action': None, 'memory': {'raw_text': out_text}}
             else:
                 resp = raw_resp
         else:
@@ -502,27 +497,32 @@ def main():
 
     response = _ensure_structured(resp)
     memory = response.get('memory', {})
-    # Exibir descrições das ações retornadas inicialmente pelo modelo
-    print_action_descriptions(response.get('actions'))
+    # Exibir descrição da ação retornada inicialmente pelo modelo
+    print_action_descriptions(response.get('action'))
 
     done = False
     total_steps = 0
-    limite = 1
+    # O limite agora é um limite de requisições feitas ao modelo (max_requests).
+    # Se o limite for alcançado, o orquestrador NÃO enviará novas requisições,
+    # mesmo que não tenha recebido uma ação 'finalizar'.
     try:
         if 'conexão' in config and 'limite_passos' in config['conexão']:
-            limite = int(config['conexão']['limite_passos'])
+            max_requests = int(config['conexão']['limite_passos'])
+        else:
+            max_requests = 1
     except Exception:
-        limite = 1
+        max_requests = 1
 
-    write_log(f"Iniciando execução de passos (limite por conexão = {limite}).")
+    # Contador de requisições já realizadas (a chamada inicial já foi feita)
+    requests_made = 1
+
+    write_log(f"Iniciando execução (limite de requisições = {max_requests}). Requisições já feitas: {requests_made}.")
 
     while not done:
-        actions = response.get('actions') or []
-        if len(actions) > limite:
-            write_log(f"Modelo retornou mais ações ({len(actions)}) do que o limite permitido ({limite}). Irei truncar as ações à quantidade do limite.")
-            actions = actions[:limite]
+        # Extrair a ação única da resposta: 'action'
+        action = response.get('action') if isinstance(response, dict) else None
 
-        for action in actions:
+        if action:
             total_steps += 1
             write_log(f"Executando ação #{total_steps}: {action.get('type')} - {action.get('description')}")
             attachments: Dict[str, Optional[str]] = {}
@@ -604,21 +604,35 @@ def main():
                     json_text = json.dumps(augmented, ensure_ascii=False)
                     send_payload = {'contents': [{'parts': [{'text': json_text}]}]}
 
+                # Antes de enviar o update, verificar se ainda podemos fazer requisições
+                if requests_made >= max_requests:
+                    write_log('Limite de requisições atingido; não enviarei atualização ao modelo.')
+                    done = True
+                    break
+
                 write_log('== ENVIANDO (update) payload -> model ==')
                 write_log(json.dumps(send_payload, ensure_ascii=False) if isinstance(send_payload, dict) else str(send_payload))
                 raw_or_text = invoke_model_with_retries(conn_obj, send_payload, is_generate_content=is_generate_content, max_retries=5)
+                requests_made += 1
                 response = _ensure_structured(raw_or_text)
                 memory = response.get('memory', {})
-                # Mostrar ações retornadas após update
-                print_action_descriptions(response.get('actions'))
+                # Mostrar ação retornada após update
+                print_action_descriptions(response.get('action'))
             except Exception as e:
                 write_log(f"Falha ao notificar modelo após executar ação: {e}")
-                response = {'status': 'error', 'plan': [], 'actions': [], 'memory': memory}
+                response = {'status': 'error', 'plan': [], 'action': None, 'memory': memory}
+        # Se não houve ação nesta resposta, solicitar próximos passos (se ainda pudermos requisitar)
+        else:
+            write_log('Nenhuma ação recebida nesta resposta.')
 
-        # if no actions, ask next steps
-        if not actions or len(actions) == 0:
+        if not action:
+            # Antes de enviar a requisição para pedir próximos passos, verificar limite
+            if requests_made >= max_requests:
+                write_log('Limite de requisições atingido; não solicitarei próximos passos.')
+                break
+
             write_log('Solicitando próximos passos ao modelo (enviando memória).')
-            ask_payload = {'request': 'next_steps', 'memory': memory, 'max_steps': limite}
+            ask_payload = {'request': 'next_steps', 'memory': memory, 'max_steps': max(0, max_requests - requests_made)}
             try:
                 plan_val2 = response.get('plan') if response else None
                 aug_ask = ask_payload
@@ -636,10 +650,11 @@ def main():
                 write_log('== ENVIANDO (ask) payload -> model ==')
                 write_log(json.dumps(send_ask, ensure_ascii=False))
                 raw_or_text2 = invoke_model_with_retries(conn_obj, send_ask, is_generate_content=is_generate_content, max_retries=5)
+                requests_made += 1
                 response = _ensure_structured(raw_or_text2)
                 memory = response.get('memory', {})
-                # Mostrar ações retornadas após ask
-                print_action_descriptions(response.get('actions'))
+                # Mostrar ação retornada após ask
+                print_action_descriptions(response.get('action'))
                 if response.get('status') == 'done':
                     done = True
             except Exception as e:

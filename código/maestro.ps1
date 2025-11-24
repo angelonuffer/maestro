@@ -167,7 +167,7 @@ function Invoke-Model {
     } elseif ($apiKey) {
         $headers['Authorization'] = "Bearer $apiKey"
     }
-    $body = $Payload | ConvertTo-Json -Depth 20
+    $body = $Payload | ConvertTo-Json -Depth 4 -Compress
     Write-Log "endpoint raw: '$endpoint'  authType: '$authType'  apiKeyPresent: $([bool]$apiKey)"
     Write-Log "Enviando requisição ao modelo em $uri..."
     try {
@@ -337,11 +337,11 @@ try {
         $combinedText = $initialPayload.orchestrator + "\n\n" + $initialPayload.prompt
         $genPayload = @{ contents = @( @{ parts = @(@{ text = $combinedText }) } ) }
         Write-Log "== ENVIANDO (initial generateContent) payload -> model =="
-        try { $genPayload | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Host $_ } } catch { Write-Host $genPayload }
+        try { $genPayload | ConvertTo-Json -Depth 4 -Compress | ForEach-Object { Write-Host $_ } } catch { Write-Host $genPayload }
         
         $rawResp = Invoke-Model -Cfg $connObj -Payload $genPayload
         Write-Log "== RESPOSTA (raw) DO MODELO =="
-        try { $rawResp | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Host $_ } } catch { Write-Host $rawResp }
+        try { $rawResp | ConvertTo-Json -Depth 4 -Compress | ForEach-Object { Write-Host $_ } } catch { Write-Host $rawResp }
         Write-Log "Resposta recebida (generateContent). Tentando extrair texto do primeiro candidato."
         $outText = $null
         try {
@@ -349,11 +349,11 @@ try {
                 $outText = $rawResp.candidates[0].content.parts[0].text
                 Write-Host $outText
             } else {
-                $rawResp | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Host $_ }
+                $rawResp | ConvertTo-Json -Depth 4 -Compress | ForEach-Object { Write-Host $_ }
             }
         } catch {
             Write-Log "Falha ao extrair texto do candidato: $_"
-            $rawResp | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Host $_ }
+            $rawResp | ConvertTo-Json -Depth 4 -Compress | ForEach-Object { Write-Host $_ }
         }
 
         # Se o modelo retornou texto, tente interpretar como JSON estrutural (status/plan/actions/memory).
@@ -385,11 +385,11 @@ try {
         }
     } else {
         Write-Log "== ENVIANDO (initial) payload -> model =="
-        try { $initialPayload | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Host $_ } } catch { Write-Host $initialPayload }
+        try { $initialPayload | ConvertTo-Json -Depth 4 -Compress | ForEach-Object { Write-Host $_ } } catch { Write-Host $initialPayload }
         
         $resp = Invoke-Model -Cfg $connObj -Payload $initialPayload
         Write-Log "== RESPOSTA (raw) DO MODELO =="
-        try { $resp | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Host $_ } } catch { Write-Host $resp }
+        try { $resp | ConvertTo-Json -Depth 4 -Compress | ForEach-Object { Write-Host $_ } } catch { Write-Host $resp }
     }
 } catch {
     Write-Log "Falha ao chamar o modelo: $_"
@@ -537,15 +537,15 @@ while (-not $done) {
 
             $sendPayload = $augmented
             if ($isGenerateContent) {
-                $jsonText = $augmented | ConvertTo-Json -Depth 20
+                $jsonText = $augmented | ConvertTo-Json -Depth 4 -Compress
                 $sendPayload = @{ contents = @( @{ parts = @(@{ text = $jsonText }) } ) }
             }
             Write-Log "== ENVIANDO (update) payload -> model =="
-            try { $sendPayload | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Host $_ } } catch { Write-Host $sendPayload }
+            try { $sendPayload | ConvertTo-Json -Depth 4 -Compress | ForEach-Object { Write-Host $_ } } catch { Write-Host $sendPayload }
             $rawOrText = Invoke-Model-WithRetries -Cfg $connObj -Payload $sendPayload -IsGenerateContent $isGenerateContent -MaxRetries 5
             $response = Ensure-StructuredResponse $rawOrText
             Write-Log "== RESPOSTA DO MODELO (update) =="
-            try { $response | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Host $_ } } catch { Write-Host $response }
+            try { $response | ConvertTo-Json -Depth 4 -Compress | ForEach-Object { Write-Host $_ } } catch { Write-Host $response }
             # atualizar memória
             $memory = $response.memory
         } catch {
@@ -577,15 +577,15 @@ while (-not $done) {
 
             $sendAsk = $augAsk
             if ($isGenerateContent) {
-                $jsonText = $augAsk | ConvertTo-Json -Depth 20
+                $jsonText = $augAsk | ConvertTo-Json -Depth 4 -Compress
                 $sendAsk = @{ contents = @( @{ parts = @(@{ text = $jsonText }) } ) }
             }
             Write-Log "== ENVIANDO (ask) payload -> model =="
-            try { $sendAsk | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Host $_ } } catch { Write-Host $sendAsk }
+            try { $sendAsk | ConvertTo-Json -Depth 4 -Compress | ForEach-Object { Write-Host $_ } } catch { Write-Host $sendAsk }
             $rawOrText2 = Invoke-Model-WithRetries -Cfg $connObj -Payload $sendAsk -IsGenerateContent $isGenerateContent -MaxRetries 5
             $response = Ensure-StructuredResponse $rawOrText2
             Write-Log "== RESPOSTA DO MODELO (ask) =="
-            try { $response | ConvertTo-Json -Depth 20 | ForEach-Object { Write-Host $_ } } catch { Write-Host $response }
+            try { $response | ConvertTo-Json -Depth 4 -Compress | ForEach-Object { Write-Host $_ } } catch { Write-Host $response }
             $memory = $response.memory
             if ($response.status -and $response.status -eq 'done') { $done = $true }
         } catch {

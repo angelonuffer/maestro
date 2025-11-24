@@ -333,7 +333,7 @@ $tree = Get-FileTree -Root $allowedRoot
 $initialPayload = @{
     orchestrator = 'maestro.ps1: orquestrador. POR FAVOR RESPONDA SOMENTE COM JSON VÁLIDO E PURO — SEM MARCAÇÃO Markdown, SEM CODE FENCES (```), SEM TEXTO ADICIONAL. O JSON deve conter apenas os campos: "status", "plan", "actions" e "memory".\nTipos de ação suportados: leia_arquivo (path), finalizar.\n(O modelo deve retornar o HTML final NA AÇÃO `finalizar` através de `parameters.content`. O orquestrador salvará esse HTML automaticamente no caminho definido em `relatório` no config ou no `parameters.path` fornecido na ação.)\nO orquestrador executa ações uma a uma, respeita conexao.limite_passos, e fornece arquivos solicitados em base64 quando o modelo usar a ação `leia_arquivo` (um arquivo por ação). O orquestrador só acessa caminhos dentro de ferramentas[*].arquivos.caminho_permitido. Sempre retorne um objeto "memory" atualizado para a próxima conexão.'
     config = $config
-    prompt = $promptText
+    prompt = "$($promptText)"
     file_tree = $tree | ForEach-Object { @{path=$_.path; length=$_.length; lastWrite=$_.lastWrite } }
     request = 'Por favor responda com objeto JSON estruturado contendo: status("ok"/"error"), plan:[...], actions:[{id,type,description,parameters}], memory:{}'
 }

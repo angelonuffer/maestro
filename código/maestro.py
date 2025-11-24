@@ -37,6 +37,24 @@ except Exception:
     yaml = None
 
 
+ORCHESTRATOR_INSTRUCTIONS = """
+    maestro.ps1: orquestrador. POR FAVOR RESPONDA SOMENTE COM JSON VÁLIDO E
+    PURO — SEM MARCAÇÃO Markdown, SEM CODE FENCES (```) , SEM TEXTO ADICIONAL.
+    O JSON deve conter apenas os campos: "status", "plan", "actions" e
+    "memory".
+    Tipos de ação suportados: leia_arquivo (path), finalizar.
+    (O modelo deve retornar o HTML final NA AÇÃO `finalizar` através de
+    `parameters.content`. O orquestrador salvará esse HTML automaticamente no
+    caminho definido em `relatório` no config ou no `parameters.path`
+    fornecido na ação.)
+    O orquestrador executa ações uma a uma, respeita conexao.limite_passos, e
+    fornece arquivos solicitados em base64 quando o modelo usar a ação
+    `leia_arquivo` (um arquivo por ação). O orquestrador só acessa caminhos
+    dentro de ferramentas[*].arquivos.caminho_permitido. Sempre retorne um
+    objeto "memory" atualizado para a próxima conexão.
+"""
+
+
 def write_log(message: str) -> None:
     ts = datetime.datetime.utcnow().replace(microsecond=0).isoformat()
     print(f"[{ts}] {message}")
@@ -266,9 +284,7 @@ def main():
     write_log(f"Gerando árvore de arquivos em {allowed_root}")
     tree = get_file_tree(allowed_root)
 
-    orchestrator_text = (
-        'maestro.ps1: orquestrador. POR FAVOR RESPONDA SOMENTE COM JSON VÁLIDO E PURO — SEM MARCAÇÃO Markdown, SEM CODE FENCES (```), SEM TEXTO ADICIONAL. O JSON deve conter apenas os campos: "status", "plan", "actions" e "memory".\nTipos de ação suportados: leia_arquivo (path), finalizar.\n(O modelo deve retornar o HTML final NA AÇÃO `finalizar` através de `parameters.content`. O orquestrador salvará esse HTML automaticamente no caminho definido em `relatório` no config ou no `parameters.path` fornecido na ação.)\nO orquestrador executa ações uma a uma, respeita conexao.limite_passos, e fornece arquivos solicitados em base64 quando o modelo usar a ação `leia_arquivo` (um arquivo por ação). O orquestrador só acessa caminhos dentro de ferramentas[*].arquivos.caminho_permitido. Sempre retorne um objeto "memory" atualizado para a próxima conexão.'
-    )
+    orchestrator_text = ORCHESTRATOR_INSTRUCTIONS
 
     initial_payload = {
         'orchestrator': orchestrator_text,

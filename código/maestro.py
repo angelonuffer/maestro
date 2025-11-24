@@ -103,6 +103,28 @@ ORCHESTRATOR_INSTRUCTIONS = """
 # sem produzir saída. Isso simplifica a remoção de logs sem alterar demais o fluxo.
 write_log = lambda *args, **kwargs: None
 
+# Flag para controlar exibição das mensagens trocadas com o modelo
+SHOW_MESSAGES = False
+
+
+def _print_prefixed(prefix: str, text: Any) -> None:
+    """Imprime `text` (pode ser multi-linha) prefixando cada linha com `prefix`."""
+    if text is None:
+        return
+    s = str(text)
+    # Garantir que mesmo string vazia resulte em uma linha impressa
+    lines = s.splitlines() or [s]
+    for line in lines:
+        print(f"{prefix} {line}")
+
+
+def print_sent(text: Any) -> None:
+    _print_prefixed('>>', text)
+
+
+def print_received(text: Any) -> None:
+    _print_prefixed('<<', text)
+
 
 def parse_config(path: str) -> Dict[str, Any]:
     if not os.path.exists(path):
@@ -222,7 +244,33 @@ def invoke_model(cfg: Dict[str, Any], payload: Any) -> Any:
 
     write_log(f"endpoint raw: '{endpoint}'  authType: '{auth_type}'  apiKeyPresent: {bool(api_key)}  plataforma: {platform}")
     write_log(f"Enviando requisição ao modelo em {endpoint}...")
-    return http_post_json(endpoint, headers, body)
+    # Se habilitado, exibe a mensagem enviada ao modelo (prefixo >>)
+    try:
+        if SHOW_MESSAGES:
+            try:
+                # tentar serializar o body de forma legível
+                print_sent(json.dumps(body, ensure_ascii=False))
+            except Exception:
+                print_sent(body)
+    except Exception:
+        pass
+
+    resp = http_post_json(endpoint, headers, body)
+
+    # Se habilitado, exibe a mensagem recebida do modelo (prefixo <<)
+    try:
+        if SHOW_MESSAGES:
+            try:
+                if isinstance(resp, dict):
+                    print_received(json.dumps(resp, ensure_ascii=False))
+                else:
+                    print_received(resp)
+            except Exception:
+                print_received(resp)
+    except Exception:
+        pass
+
+    return resp
 
 
 def invoke_model_with_retries(cfg: Dict[str, Any], payload: Any, is_generate_content: bool = False, max_retries: int = 5) -> Any:
@@ -306,8 +354,11 @@ def print_action_descriptions(actions: Optional[List[Dict[str, Any]]]) -> None:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('config_path', help='Caminho para o arquivo de configuração (YAML/JSON)')
+    parser.add_argument('--show-messages', '-m', action='store_true', help='Mostrar mensagens enviadas/recebidas do modelo (prefixo >> e <<)')
     args = parser.parse_args()
     config_path = args.config_path
+    global SHOW_MESSAGES
+    SHOW_MESSAGES = bool(getattr(args, 'show_messages', False))
 
     write_log(f"Carregando configuração: {config_path}")
     config = parse_config(config_path)

@@ -99,9 +99,9 @@ ORCHESTRATOR_INSTRUCTIONS = """
 """
 
 
-def write_log(message: str) -> None:
-    ts = datetime.datetime.utcnow().replace(microsecond=0).isoformat()
-    print(f"[{ts}] {message}")
+# Removida a função de logging. Substituímos por um no-op para manter chamadas existentes
+# sem produzir saída. Isso simplifica a remoção de logs sem alterar demais o fluxo.
+write_log = lambda *args, **kwargs: None
 
 
 def parse_config(path: str) -> Dict[str, Any]:
@@ -289,6 +289,20 @@ def ensure_structured_response(r: Any) -> Dict[str, Any]:
         return {'status': 'ok', 'plan': [], 'actions': [], 'memory': {}}
 
 
+def print_action_descriptions(actions: Optional[List[Dict[str, Any]]]) -> None:
+    """Imprime na saída as descrições das ações retornadas pelo modelo.
+
+    Formato simples e legível com id, type e description.
+    """
+    if not actions:
+        return
+    for a in actions:
+        aid = a.get('id')
+        typ = a.get('type')
+        desc = a.get('description')
+        print(f"-- {aid}:{typ}: {desc}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('config_path', help='Caminho para o arquivo de configuração (YAML/JSON)')
@@ -396,7 +410,6 @@ def main():
             try:
                 if raw_resp and isinstance(raw_resp, dict) and 'candidates' in raw_resp and len(raw_resp['candidates']) > 0:
                     out_text = raw_resp['candidates'][0]['content']['parts'][0]['text']
-                    print(out_text)
                 else:
                     write_log(str(raw_resp))
             except Exception as e:
@@ -438,6 +451,8 @@ def main():
 
     response = _ensure_structured(resp)
     memory = response.get('memory', {})
+    # Exibir descrições das ações retornadas inicialmente pelo modelo
+    print_action_descriptions(response.get('actions'))
 
     done = False
     total_steps = 0
@@ -542,9 +557,9 @@ def main():
                 write_log(json.dumps(send_payload, ensure_ascii=False) if isinstance(send_payload, dict) else str(send_payload))
                 raw_or_text = invoke_model_with_retries(conn_obj, send_payload, is_generate_content=is_generate_content, max_retries=5)
                 response = _ensure_structured(raw_or_text)
-                write_log('== RESPOSTA DO MODELO (update) ==')
-                write_log(json.dumps(response, ensure_ascii=False) if isinstance(response, dict) else str(response))
                 memory = response.get('memory', {})
+                # Mostrar ações retornadas após update
+                print_action_descriptions(response.get('actions'))
             except Exception as e:
                 write_log(f"Falha ao notificar modelo após executar ação: {e}")
                 response = {'status': 'error', 'plan': [], 'actions': [], 'memory': memory}
@@ -571,9 +586,9 @@ def main():
                 write_log(json.dumps(send_ask, ensure_ascii=False))
                 raw_or_text2 = invoke_model_with_retries(conn_obj, send_ask, is_generate_content=is_generate_content, max_retries=5)
                 response = _ensure_structured(raw_or_text2)
-                write_log('== RESPOSTA DO MODELO (ask) ==')
-                write_log(json.dumps(response, ensure_ascii=False) if isinstance(response, dict) else str(response))
                 memory = response.get('memory', {})
+                # Mostrar ações retornadas após ask
+                print_action_descriptions(response.get('actions'))
                 if response.get('status') == 'done':
                     done = True
             except Exception as e:

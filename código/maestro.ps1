@@ -89,9 +89,23 @@ function Parse-YamlToObject {
     param([string]$Path)
     if (-not (Test-Path $Path)) { throw "Arquivo de configuração não encontrado: $Path" }
     try {
+        $ext = [System.IO.Path]::GetExtension($Path).ToLowerInvariant()
+        $text = Get-Content -Raw -Path $Path
+
+        # If file is JSON by extension, parse as JSON
+        if ($ext -eq '.json') {
+            return $text | ConvertFrom-Json
+        }
+
+        # Try parsing as JSON even if extension not .json (file may be JSON)
+        try {
+            return $text | ConvertFrom-Json
+        } catch {
+            # not JSON, continue to parse YAML
+        }
+
         if (Get-Command -Name ConvertFrom-Yaml -ErrorAction SilentlyContinue) {
-            $yamlText = Get-Content -Raw -Path $Path
-            return ConvertFrom-Yaml -Yaml $yamlText
+            return ConvertFrom-Yaml -Yaml $text
         } else {
             # Fallback: use Python to convert YAML -> JSON then convert from JSON
             if (-not (Get-Command -Name python -ErrorAction SilentlyContinue)) {
@@ -110,7 +124,7 @@ print(json.dumps(data))
             return $json | ConvertFrom-Json
         }
     } catch {
-        throw "Falha ao parsear YAML: $_"
+        throw "Falha ao parsear arquivo de configuração: $_"
     }
 }
 

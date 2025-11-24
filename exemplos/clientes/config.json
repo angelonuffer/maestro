@@ -1,0 +1,20 @@
+{
+  "conexão": {
+    "endereço": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+    "chave": "GEMINI_API_KEY",
+    "modelo": "gemini-2.5-flash",
+    "limite_passos": 5,
+    "autenticação": {
+      "tipo": "api_key"
+    }
+  },
+  "ferramentas": [
+    {
+      "arquivos": {
+        "caminho_permitido": "./dados"
+      }
+    }
+  ],
+  "solicitação": "solicitação.md",
+  "relatório": "relatório_clientes.html"
+}

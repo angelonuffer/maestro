@@ -157,13 +157,15 @@ function Invoke-Model {
     $endpoint = $Cfg.endpoint
     $apiKey = $Cfg.api_key_value
     $authType = $Cfg.auth_type
+    $apiKeyHeader = $Cfg.api_key_header
     if (-not $endpoint) { throw "endpoint da conexão não configurado." }
     $headers = @{'Content-Type'='application/json'}
     $uri = $endpoint
     # Suporte a dois modos de autenticação: api_key (chave via header x-goog-api-key) ou token bearer
     if ($authType -and $authType -eq 'api_key' -and $apiKey) {
-        # usar header x-goog-api-key conforme documentação de algumas rotas Gemini
-        $headers['x-goog-api-key'] = $apiKey
+        # usar header configurável para api key (padrão: x-goog-api-key)
+        $headerName = if ($apiKeyHeader) { $apiKeyHeader } else { 'x-goog-api-key' }
+        $headers[$headerName] = $apiKey
     } elseif ($apiKey) {
         $headers['Authorization'] = "Bearer $apiKey"
     }
@@ -302,8 +304,11 @@ $initialPayload = @{
 }
 
 # monta objeto de conexão a partir das propriedades em português
-$connObj = @{}
-if ($config.'conexão') {
+ $connObj = @{}
+ if (-not $config.'conexão') {
+     throw "Propriedade 'conexão' ausente no arquivo de configuração; 'conexão.autenticação' é obrigatória."
+ }
+ if ($config.'conexão') {
     $conn = $config.'conexão'
     if ($conn.endereço) { $connObj.endpoint = $conn.endereço }
     elseif ($conn.endereco) { $connObj.endpoint = $conn.endereco }
@@ -311,8 +316,18 @@ if ($config.'conexão') {
     if ($conn.modelo) { $connObj.model = $conn.modelo } elseif ($conn.model) { $connObj.model = $conn.model }
     if ($conn.chave) { $connObj.api_key_var = $conn.chave }
     elseif ($conn.api_key) { $connObj.api_key_var = $conn.api_key }
-    # tipo de autenticação (api_key ou service_account)
-    if ($conn.autenticação -and $conn.autenticação.tipo) { $connObj.auth_type = $conn.autenticação.tipo } else { $connObj.auth_type = 'api_key' }
+    # Autenticação: `conexão.autenticação` DEVE SER UMA STRING contendo o NOME do header
+    # a ser usado para envio da API key (ex.: "x-goog-api-key" ou "x-custom-api-key").
+    # Se a propriedade existir mas não for string, abortamos com erro (formato antigo não suportado).
+    if ($conn.PSObject.Properties.Match('autenticação').Count -eq 0) {
+        throw "Propriedade 'conexão.autenticação' ausente: agora é obrigatória e deve ser uma string com o nome do header (ex.: 'x-goog-api-key')."
+    }
+    if (-not ($conn.'autenticação' -is [string])) {
+        throw "Propriedade 'conexão.autenticação' inválida: deve ser uma string com o nome do header (ex.: 'x-goog-api-key')."
+    }
+    $connObj.api_key_header = $conn.'autenticação'
+    $connObj.auth_type = 'api_key'
+
     # resolve valor da chave da API a partir da variável de ambiente, se indicada
     $connObj.api_key_value = $null
     if ($connObj.api_key_var) {

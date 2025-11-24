@@ -4,9 +4,7 @@
     "chave": "GEMINI_API_KEY",
     "modelo": "gemini-2.5-flash",
     "limite_passos": 5,
-    "autenticação": {
-      "tipo": "api_key"
-    }
+    "autenticação": "x-goog-api-key"
   },
   "ferramentas": [
     {

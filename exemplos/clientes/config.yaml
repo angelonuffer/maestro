@@ -7,9 +7,11 @@ conexão:
   chave: "GEMINI_API_KEY"
   modelo: "gemini-2.5-flash"
   limite_passos: 5
-  autenticação:
-    tipo: "api_key" # opções: "api_key" ou "service_account"
-    # observacao: Para usar service account, defina GOOGLE_APPLICATION_CREDENTIALS apontando para o JSON de credenciais.
+  autenticação: "x-goog-api-key" # nome do header que conterá a API key (ex.: "x-goog-api-key")
+  # Observação: a propriedade `conexão.autenticação` agora deve ser UMA STRING
+  # contendo o nome do header usado para enviar a API key. Para autenticação por
+  # token Bearer/service account, mantenha `conexão.chave` apontando para a
+  # variável de ambiente apropriada ou configure credenciais de serviço externamente.
 
 ferramentas:
   - arquivos:

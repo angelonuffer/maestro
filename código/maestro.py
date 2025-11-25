@@ -135,9 +135,40 @@ ORCHESTRATOR_INSTRUCTIONS = """
 """
 
 
-# Removida a função de logging. Substituímos por um no-op para manter chamadas existentes
-# sem produzir saída. Isso simplifica a remoção de logs sem alterar demais o fluxo.
-write_log = lambda *args, **kwargs: None
+# Função de logging: escreve mensagens com timestamp UTC em stderr ou
+# em um arquivo quando `LOG_FILE_PATH` for configurado.
+LOG_FILE_PATH: Optional[str] = None
+def write_log(*args, sep=' ', end='\n'):
+    """Escreve uma linha de log com timestamp UTC.
+
+    Se `LOG_FILE_PATH` estiver definido, tenta escrever em append nesse
+    arquivo (criando diretórios se necessário). Em caso de falha, cai
+    back para `stderr`. Não lança exceções.
+    """
+    try:
+        ts = datetime.datetime.utcnow().isoformat()
+        msg = sep.join(str(a) for a in args)
+        line = f"{ts} {msg}{end}"
+        if LOG_FILE_PATH:
+            try:
+                log_dir = os.path.dirname(LOG_FILE_PATH)
+                if log_dir and not os.path.exists(log_dir):
+                    os.makedirs(log_dir, exist_ok=True)
+                with open(LOG_FILE_PATH, 'a', encoding='utf-8') as fh:
+                    fh.write(line)
+                return
+            except Exception:
+                # fallback para stderr
+                pass
+        try:
+            sys.stderr.write(line)
+        except Exception:
+            pass
+    except Exception:
+        try:
+            sys.stderr.write("logging failure\n")
+        except Exception:
+            pass
 
 # Flag para controlar exibição das mensagens trocadas com o modelo
 SHOW_MESSAGES = False
@@ -445,12 +476,17 @@ def main():
     parser.add_argument('config_path', help='Caminho para o arquivo de configuração (YAML/JSON)')
     parser.add_argument('--show-messages', '-m', action='store_true', help='Mostrar mensagens enviadas/recebidas do modelo (prefixo >> e <<)')
     parser.add_argument('--show-memory', '-M', action='store_true', help='Mostrar a memória retornada a cada passo (prefixo MEM)')
+    parser.add_argument('--log-file', '-l', help='Caminho para arquivo de log; se fornecido, logs serão salvos nele (append).')
     args = parser.parse_args()
     config_path = args.config_path
     global SHOW_MESSAGES
     global SHOW_MEMORY
+    global LOG_FILE_PATH
     SHOW_MESSAGES = bool(getattr(args, 'show_messages', False))
     SHOW_MEMORY = bool(getattr(args, 'show_memory', False))
+    # definir caminho do arquivo de log se fornecido
+    if getattr(args, 'log_file', None):
+        LOG_FILE_PATH = args.log_file
 
     write_log(f"Carregando configuração: {config_path}")
     config = parse_config(config_path)

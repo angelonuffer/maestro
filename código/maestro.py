@@ -586,11 +586,7 @@ def main():
         if is_generate_content:
             combined_text = initial_payload['orchestrator'] + "\n\n" + initial_payload['prompt']
             gen_payload = {'contents': [{'parts': [{'text': combined_text}]}]}
-            write_log('== ENVIANDO (initial generateContent) payload -> model ==')
-            write_log(json.dumps(gen_payload, ensure_ascii=False))
             raw_resp = invoke_model(conn_obj, gen_payload)
-            write_log('== RESPOSTA (raw) DO MODELO ==')
-            write_log(json.dumps(raw_resp, ensure_ascii=False) if isinstance(raw_resp, dict) else str(raw_resp))
             out_text = None
             try:
                 if raw_resp and isinstance(raw_resp, dict) and 'candidates' in raw_resp and len(raw_resp['candidates']) > 0:
@@ -622,11 +618,7 @@ def main():
             else:
                 resp = raw_resp
         else:
-            write_log('== ENVIANDO (initial) payload -> model ==')
-            write_log(json.dumps(initial_payload, ensure_ascii=False))
             resp = invoke_model(conn_obj, initial_payload)
-            write_log('== RESPOSTA (raw) DO MODELO ==')
-            write_log(json.dumps(resp, ensure_ascii=False) if isinstance(resp, dict) else str(resp))
     except Exception as e:
         write_log(f"Falha ao chamar o modelo: {e}")
         sys.exit(1)
@@ -759,8 +751,6 @@ def main():
                     done = True
                     break
 
-                write_log('== ENVIANDO (update) payload -> model ==')
-                write_log(json.dumps(send_payload, ensure_ascii=False) if isinstance(send_payload, dict) else str(send_payload))
                 raw_or_text = invoke_model_with_retries(conn_obj, send_payload, is_generate_content=is_generate_content, max_retries=5)
                 requests_made += 1
                 response = _ensure_structured(raw_or_text)
@@ -798,8 +788,6 @@ def main():
                 if is_generate_content:
                     json_text = json.dumps(aug_ask, ensure_ascii=False)
                     send_ask = {'contents': [{'parts': [{'text': json_text}]}]}
-                write_log('== ENVIANDO (ask) payload -> model ==')
-                write_log(json.dumps(send_ask, ensure_ascii=False))
                 raw_or_text2 = invoke_model_with_retries(conn_obj, send_ask, is_generate_content=is_generate_content, max_retries=5)
                 requests_made += 1
                 response = _ensure_structured(raw_or_text2)

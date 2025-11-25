@@ -72,6 +72,12 @@ ORCHESTRATOR_INSTRUCTIONS = """
                         * restrição: o arquivo só será fornecido se estiver dentro da raiz
                             permitida (`ferramentas[*].arquivos.caminho_permitido`);
                             apenas um arquivo por ação.
+                        * observação adicional: quando o modelo solicitar um arquivo
+                            com extensão `.docx`, o orquestrador CONVERTERÁ automaticamente
+                            o `.docx` para texto puro (UTF-8) e retornará esse texto
+                            codificado em base64 no `attachments[path]`. Se a conversão
+                            falhar, o orquestrador retornará o binário do `.docx` em
+                            base64 como fallback.
 
                 - "finalizar": indica que o trabalho terminou e pode conter o HTML final.
                         * parâmetros aceitos (ordem de preferência):
@@ -240,6 +246,46 @@ def read_file_base64(path: str) -> Optional[str]:
     with open(path, 'rb') as f:
         b = f.read()
     return base64.b64encode(b).decode('ascii')
+
+
+def docx_to_plaintext(path: str) -> Optional[str]:
+    """Converte um arquivo .docx para texto puro (UTF-8).
+
+    Tenta usar `python-docx` quando disponível; se não estiver instalado,
+    faz um fallback simples extraindo `word/document.xml` do .docx (zip)
+    e removendo tags XML para obter texto aproximado.
+
+    Retorna `None` em caso de falha.
+    """
+    try:
+        from docx import Document
+        doc = Document(path)
+        parts: List[str] = []
+        for p in doc.paragraphs:
+            if p.text:
+                parts.append(p.text)
+        # extrair texto de tabelas também
+        for table in getattr(doc, 'tables', []):
+            for row in table.rows:
+                parts.append(' '.join(cell.text for cell in row.cells if cell.text))
+        return '\n'.join(parts).strip()
+    except Exception:
+        # fallback: extrair word/document.xml do arquivo .docx (zip)
+        try:
+            import zipfile
+            import re
+            with zipfile.ZipFile(path) as z:
+                with z.open('word/document.xml') as fh:
+                    data = fh.read().decode('utf-8', errors='ignore')
+            # substituir quebras de parágrafo e tabs por newlines
+            data = re.sub(r'</w:p>|</w:tab>|</w:br>', '\n', data)
+            # remover tags XML
+            text = re.sub(r'<[^>]+>', '', data)
+            # reduzir múltiplas quebras de linha
+            text = re.sub(r'\n\s*\n+', '\n\n', text)
+            return text.strip()
+        except Exception:
+            return None
 
 
 def ensure_directory_exists(path: str) -> None:
@@ -689,8 +735,20 @@ def main():
                         attachments[path_param] = None
                     else:
                         write_log(f"Lendo arquivo solicitado pelo modelo: {resolved}")
-                        content_b64 = read_file_base64(resolved)
-                        attachments[path_param] = content_b64
+                        write_log(f"Lendo arquivo solicitado pelo modelo: {resolved}")
+                        # Se for .docx, convertemos para texto puro (UTF-8) e
+                        # retornamos o texto codificado em base64. Se a conversão
+                        # falhar, fazemos fallback para o binário original.
+                        if resolved.lower().endswith('.docx'):
+                            txt = docx_to_plaintext(resolved)
+                            if txt is None:
+                                write_log('Falha ao converter .docx para texto; retornando binário base64 como fallback.')
+                                attachments[path_param] = read_file_base64(resolved)
+                            else:
+                                attachments[path_param] = base64.b64encode(txt.encode('utf-8')).decode('ascii')
+                        else:
+                            content_b64 = read_file_base64(resolved)
+                            attachments[path_param] = content_b64
 
             elif typ == 'finalizar':
                 write_log('Ação finalizar recebida: processando resultado final.')

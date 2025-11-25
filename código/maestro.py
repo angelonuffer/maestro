@@ -179,6 +179,7 @@ def write_log(*args, sep=' ', end='\n'):
 # Flag para controlar exibição das mensagens trocadas com o modelo
 SHOW_MESSAGES = False
 SHOW_MEMORY = False
+SHOW_ATTACHMENTS = False
 
 
 def _print_prefixed(prefix: str, text: Any) -> None:
@@ -517,19 +518,40 @@ def print_memory(mem: Any) -> None:
     _print_prefixed('MEM', pretty)
 
 
+def print_attachments(att: Any) -> None:
+    """Imprime os attachments (objeto) com prefixo `AT`.
+
+    Pode receber `None` ou dicionário mapping path -> base64|null.
+    """
+    if att is None:
+        _print_prefixed('AT', 'null')
+        return
+    try:
+        s = json.dumps(att, ensure_ascii=False)
+    except Exception:
+        try:
+            s = str(att)
+        except Exception:
+            s = '<unprintable attachments>'
+    _print_prefixed('AT', s)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('config_path', help='Caminho para o arquivo de configuração (YAML/JSON)')
     parser.add_argument('--show-messages', '-m', action='store_true', help='Mostrar mensagens enviadas/recebidas do modelo (prefixo >> e <<)')
     parser.add_argument('--show-memory', '-M', action='store_true', help='Mostrar a memória retornada a cada passo (prefixo MEM)')
+    parser.add_argument('--show-attachments', '-a', action='store_true', help='Mostrar os `attachments` que serão enviados ao modelo (conteúdo base64 ou null)')
     parser.add_argument('--log-file', '-l', help='Caminho para arquivo de log; se fornecido, logs serão salvos nele (append).')
     args = parser.parse_args()
     config_path = args.config_path
     global SHOW_MESSAGES
     global SHOW_MEMORY
+    global SHOW_ATTACHMENTS
     global LOG_FILE_PATH
     SHOW_MESSAGES = bool(getattr(args, 'show_messages', False))
     SHOW_MEMORY = bool(getattr(args, 'show_memory', False))
+    SHOW_ATTACHMENTS = bool(getattr(args, 'show_attachments', False))
     # definir caminho do arquivo de log se fornecido
     if getattr(args, 'log_file', None):
         LOG_FILE_PATH = args.log_file
@@ -798,6 +820,13 @@ def main():
                 augmented['config'] = config
                 augmented['plan'] = plan_val
 
+                # Exibir attachments que serão enviados, quando solicitado
+                if SHOW_ATTACHMENTS:
+                    try:
+                        print_attachments(augmented.get('attachments'))
+                    except Exception:
+                        pass
+
                 send_payload = augmented
                 if is_generate_content:
                     json_text = json.dumps(augmented, ensure_ascii=False)
@@ -841,6 +870,13 @@ def main():
                 aug_ask['request'] = initial_payload['request']
                 aug_ask['config'] = config
                 aug_ask['plan'] = plan_val2
+
+                # Exibir attachments que serão enviados no ask (se houver)
+                if SHOW_ATTACHMENTS:
+                    try:
+                        print_attachments(aug_ask.get('attachments'))
+                    except Exception:
+                        pass
 
                 send_ask = aug_ask
                 if is_generate_content:

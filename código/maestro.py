@@ -104,6 +104,7 @@ write_log = lambda *args, **kwargs: None
 
 # Flag para controlar exibição das mensagens trocadas com o modelo
 SHOW_MESSAGES = False
+SHOW_MEMORY = False
 
 
 def _print_prefixed(prefix: str, text: Any) -> None:
@@ -391,14 +392,28 @@ def print_action_descriptions(action: Optional[Dict[str, Any]]) -> None:
     print(f"-- {aid}:{typ}: {desc}")
 
 
+def print_memory(mem: Any) -> None:
+    """Imprime a memória com prefixo `MEM` e formatação legível (JSON)."""
+    if mem is None:
+        return
+    try:
+        pretty = json.dumps(mem, ensure_ascii=False, indent=2)
+    except Exception:
+        pretty = str(mem)
+    _print_prefixed('MEM', pretty)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('config_path', help='Caminho para o arquivo de configuração (YAML/JSON)')
     parser.add_argument('--show-messages', '-m', action='store_true', help='Mostrar mensagens enviadas/recebidas do modelo (prefixo >> e <<)')
+    parser.add_argument('--show-memory', '-M', action='store_true', help='Mostrar a memória retornada a cada passo (prefixo MEM)')
     args = parser.parse_args()
     config_path = args.config_path
     global SHOW_MESSAGES
+    global SHOW_MEMORY
     SHOW_MESSAGES = bool(getattr(args, 'show_messages', False))
+    SHOW_MEMORY = bool(getattr(args, 'show_memory', False))
 
     write_log(f"Carregando configuração: {config_path}")
     config = parse_config(config_path)
@@ -544,6 +559,8 @@ def main():
     memory = response.get('memory', {})
     # Exibir descrição da ação retornada inicialmente pelo modelo
     print_action_descriptions(response.get('action'))
+    if SHOW_MEMORY:
+        print_memory(memory)
 
     done = False
     total_steps = 0
@@ -663,6 +680,8 @@ def main():
                 memory = response.get('memory', {})
                 # Mostrar ação retornada após update
                 print_action_descriptions(response.get('action'))
+                if SHOW_MEMORY:
+                    print_memory(memory)
             except Exception as e:
                 write_log(f"Falha ao notificar modelo após executar ação: {e}")
                 response = {'status': 'error', 'plan': [], 'action': None, 'memory': memory}
@@ -700,6 +719,8 @@ def main():
                 memory = response.get('memory', {})
                 # Mostrar ação retornada após ask
                 print_action_descriptions(response.get('action'))
+                if SHOW_MEMORY:
+                    print_memory(memory)
                 if response.get('status') == 'done':
                     done = True
             except Exception as e:

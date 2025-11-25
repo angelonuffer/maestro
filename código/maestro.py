@@ -325,7 +325,52 @@ def ensure_structured_response(r: Any) -> Dict[str, Any]:
                     pass
             # fallback: retornar string em memory.raw_text
             return {'status': 'ok', 'plan': [], 'action': None, 'memory': {'raw_text': r}}
+    # Se for um dicionário, tentar detectar formatos conhecidos de resposta.
     if isinstance(r, dict):
+        # Azure OpenAI: olhar em choices[0].message.content
+        try:
+            if 'choices' in r and isinstance(r['choices'], list) and len(r['choices']) > 0:
+                choice0 = r['choices'][0]
+                content = None
+                if isinstance(choice0, dict):
+                    msg = choice0.get('message')
+                    if isinstance(msg, dict) and 'content' in msg:
+                        content = msg.get('content')
+                    elif 'text' in choice0:
+                        content = choice0.get('text')
+                # Se encontramos conteúdo textual, tentar parsear o JSON interno
+                if content is not None:
+                    # content pode ser string ou objeto; normalizar para string
+                    content_text = content if isinstance(content, str) else (content.get('content') if isinstance(content, dict) and 'content' in content else json.dumps(content))
+                    if isinstance(content_text, str):
+                        try:
+                            parsed = json.loads(content_text)
+                            if isinstance(parsed, dict):
+                                if 'memory' not in parsed:
+                                    parsed['memory'] = {}
+                                return parsed
+                            # se o JSON parseado não é dict, encapsular
+                            return {'status': 'ok', 'plan': [], 'action': None, 'memory': {'raw_parsed': parsed}}
+                        except Exception:
+                            # heurística: extrair bloco JSON dentro do texto
+                            s_index = content_text.find('{')
+                            e_index = content_text.rfind('}')
+                            if s_index >= 0 and e_index > s_index:
+                                candidate = content_text[s_index:e_index + 1]
+                                try:
+                                    parsed2 = json.loads(candidate)
+                                    if isinstance(parsed2, dict):
+                                        if 'memory' not in parsed2:
+                                            parsed2['memory'] = {}
+                                        return parsed2
+                                except Exception:
+                                    pass
+                            return {'status': 'ok', 'plan': [], 'action': None, 'memory': {'raw_text': content_text}}
+        except Exception:
+            # falha ao inspecionar formato choices — continuar com fallback abaixo
+            pass
+
+        # fallback: garantir que exista 'memory' e retornar o dict original
         if 'memory' not in r:
             r['memory'] = {}
         return r

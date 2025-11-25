@@ -78,6 +78,13 @@ ORCHESTRATOR_INSTRUCTIONS = """
                             codificado em base64 no `attachments[path]`. Se a conversão
                             falhar, o orquestrador retornará o binário do `.docx` em
                             base64 como fallback.
+                        * observação adicional 2: quando o modelo solicitar um arquivo
+                            com extensão `.xlsx`, o orquestrador CONVERTERÁ cada aba
+                            da planilha em CSV (uma string por aba), montará um objeto
+                            JSON mapeando `nome_da_aba -> csv_text` e retornará esse
+                            JSON codificado em UTF-8 e depois em base64 no
+                            `attachments[path]`. Se a conversão falhar, o orquestrador
+                            retornará o binário do `.xlsx` em base64 como fallback.
 
                 - "finalizar": indica que o trabalho terminou e pode conter o HTML final.
                         * parâmetros aceitos (ordem de preferência):
@@ -768,6 +775,44 @@ def main():
                                 attachments[path_param] = read_file_base64(resolved)
                             else:
                                 attachments[path_param] = base64.b64encode(txt.encode('utf-8')).decode('ascii')
+                        # Se for .xlsx, converter cada aba para CSV e retornar um
+                        # JSON (mapeando nome_da_aba -> csv_text) codificado em base64.
+                        elif resolved.lower().endswith('.xlsx'):
+                            try:
+                                # Preferir pandas quando disponível (lê todas as abas facilmente)
+                                try:
+                                    import pandas as _pd
+                                    sheets = _pd.read_excel(resolved, sheet_name=None)
+                                    out = {}
+                                    for name, df in sheets.items():
+                                        # converter DataFrame para CSV (string)
+                                        csv_text = df.to_csv(index=False, encoding='utf-8')
+                                        out[name] = csv_text
+                                    json_text = json.dumps(out, ensure_ascii=False)
+                                    attachments[path_param] = base64.b64encode(json_text.encode('utf-8')).decode('ascii')
+                                except Exception:
+                                    # Fallback usando openpyxl + csv + io
+                                    try:
+                                        import io as _io
+                                        import csv as _csv
+                                        from openpyxl import load_workbook as _load_workbook
+                                        wb = _load_workbook(resolved, read_only=True, data_only=True)
+                                        out = {}
+                                        for ws in wb.worksheets:
+                                            sio = _io.StringIO()
+                                            writer = _csv.writer(sio)
+                                            for row in ws.iter_rows(values_only=True):
+                                                # normalizar valores None -> ''
+                                                writer.writerow(["" if v is None else v for v in row])
+                                            out[ws.title] = sio.getvalue()
+                                        json_text = json.dumps(out, ensure_ascii=False)
+                                        attachments[path_param] = base64.b64encode(json_text.encode('utf-8')).decode('ascii')
+                                    except Exception:
+                                        write_log('Falha ao converter .xlsx (fallback openpyxl); retornando binário base64 como fallback.')
+                                        attachments[path_param] = read_file_base64(resolved)
+                            except Exception:
+                                write_log('Erro inesperado ao processar .xlsx; retornando binário base64 como fallback.')
+                                attachments[path_param] = read_file_base64(resolved)
                         else:
                             content_b64 = read_file_base64(resolved)
                             attachments[path_param] = content_b64

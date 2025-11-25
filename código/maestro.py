@@ -226,7 +226,7 @@ def get_file_tree(root: str) -> List[Dict[str, Any]]:
                 length = None
                 last_write = None
             out.append({
-                'path': rel.replace(os.path.sep, '/'),
+                'path': rel,
                 'fullPath': full,
                 'length': length,
                 'lastWrite': last_write,
@@ -508,13 +508,19 @@ def main():
 
     # allowed root
     allowed_root = None
+    # flag indicando se o caminho_permitido originalmente era absoluto
+    allowed_root_from_absolute = False
     ferramentas = config.get('ferramentas')
     if ferramentas and isinstance(ferramentas, list):
         for f in ferramentas:
             arquivos = f.get('arquivos') if isinstance(f, dict) else None
             if arquivos and 'caminho_permitido' in arquivos:
                 allowed = arquivos['caminho_permitido']
-                allowed_root = allowed if os.path.isabs(allowed) else os.path.join(config_dir, allowed)
+                if os.path.isabs(allowed):
+                    allowed_root = allowed
+                    allowed_root_from_absolute = True
+                else:
+                    allowed_root = os.path.join(config_dir, allowed)
                 break
     if not allowed_root:
         allowed_root = config_dir
@@ -671,7 +677,15 @@ def main():
                     path_param = action['path']
                 if not path_param:
                     raise RuntimeError('Parâmetro path obrigatório para leia_arquivo.')
-                fpath = path_param if os.path.isabs(path_param) else os.path.join(config_dir, path_param)
+                # Se o parâmetro for absoluto, use diretamente.
+                # Caso contrário, quando a configuração `caminho_permitido` foi
+                # fornecida como um caminho absoluto, use-a como raiz para
+                # reconstruir o caminho; caso contrário, use `config_dir`.
+                if os.path.isabs(path_param):
+                    fpath = path_param
+                else:
+                    base_for_relative = allowed_root if allowed_root_from_absolute else config_dir
+                    fpath = os.path.join(base_for_relative, path_param)
                 resolved = os.path.abspath(fpath) if os.path.exists(fpath) else None
                 if not resolved:
                     write_log(f"Arquivo solicitado não encontrado: {fpath}")

@@ -416,6 +416,67 @@ def invoke_model(cfg: Dict[str, Any], payload: Any) -> Any:
     return resp
 
 
+def safe_invoke(cfg: Dict[str, Any], payload_obj: Any, is_generate_content: bool = False, max_retries: Optional[int] = None, prompt_text: Optional[str] = None, request_text: Optional[str] = None, memory_obj: Optional[Dict[str, Any]] = None) -> Any:
+    """Envia o payload ao modelo verificando o tamanho JSON (limite 800KB).
+
+    Se o payload serializado exceder o limite, não envia o payload original. Em
+    vez disso, envia um payload reduzido contendo uma notificação e as chaves
+    necessárias para continuidade da sessão: `prompt`, `request` e `memory`.
+
+    - Quando `is_generate_content` for True, preserva o formato `{contents: ...}`
+      quando `payload_obj` já estiver nesse formato; caso contrário, embala
+      o JSON em um campo de texto compatível.
+    - Quando `max_retries` for fornecido, delega para `invoke_model_with_retries`.
+    """
+    try:
+        try:
+            json_text = json.dumps(payload_obj, ensure_ascii=False)
+        except Exception:
+            # Fallback para representação string quando a serialização falhar
+            json_text = str(payload_obj)
+        size_bytes = len(json_text.encode('utf-8'))
+    except Exception:
+        # Em caso de erro inesperado na medição, enviar normalmente
+        size_bytes = 0
+
+    limit = 800 * 1024  # 800 KB
+    if size_bytes and size_bytes > limit:
+        write_log(f"Payload size {size_bytes} bytes exceeds limit {limit}; sending reduced notice payload.")
+        alt = {
+            'notice': 'payload_too_large',
+            'message': 'A requisição original excede 800KB e foi omitida pelo orquestrador.',
+            'prompt': prompt_text,
+            'request': request_text,
+            'memory': memory_obj or {}
+        }
+        if is_generate_content:
+            # Embalar como texto em contents
+            small_text = json.dumps(alt, ensure_ascii=False)
+            payload_to_send = {'contents': [{'parts': [{'text': small_text}]}]}
+        else:
+            payload_to_send = alt
+    else:
+        # Dentro do limite: enviar o payload original. Para endpoints do tipo
+        # generateContent, preservar estrutura quando já for `{contents:...}`.
+        if is_generate_content:
+            if isinstance(payload_obj, dict) and 'contents' in payload_obj:
+                payload_to_send = payload_obj
+            else:
+                try:
+                    text = json.dumps(payload_obj, ensure_ascii=False)
+                except Exception:
+                    text = str(payload_obj)
+                payload_to_send = {'contents': [{'parts': [{'text': text}]}]}
+        else:
+            payload_to_send = payload_obj
+
+    # Delegar para a função apropriada (com ou sem retries)
+    if max_retries and int(max_retries) > 0:
+        return invoke_model_with_retries(cfg, payload_to_send, is_generate_content=is_generate_content, max_retries=int(max_retries))
+    else:
+        return invoke_model(cfg, payload_to_send)
+
+
 def invoke_model_with_retries(cfg: Dict[str, Any], payload: Any, is_generate_content: bool = False, max_retries: int = 5) -> Any:
     for attempt in range(1, max_retries + 1):
         write_log(f"Tentativa de chamada ao modelo: {attempt} / {max_retries}")
@@ -684,7 +745,7 @@ def main():
         if is_generate_content:
             combined_text = initial_payload['orchestrator'] + "\n\n" + initial_payload['prompt']
             gen_payload = {'contents': [{'parts': [{'text': combined_text}]}]}
-            raw_resp = invoke_model(conn_obj, gen_payload)
+            raw_resp = safe_invoke(conn_obj, gen_payload, is_generate_content=True, max_retries=None, prompt_text=prompt_text, request_text=initial_payload.get('request'), memory_obj={})
             out_text = None
             try:
                 if raw_resp and isinstance(raw_resp, dict) and 'candidates' in raw_resp and len(raw_resp['candidates']) > 0:
@@ -716,7 +777,7 @@ def main():
             else:
                 resp = raw_resp
         else:
-            resp = invoke_model(conn_obj, initial_payload)
+            resp = safe_invoke(conn_obj, initial_payload, is_generate_content=False, max_retries=None, prompt_text=prompt_text, request_text=initial_payload.get('request'), memory_obj={})
     except Exception as e:
         write_log(f"Falha ao chamar o modelo: {e}")
         sys.exit(1)
@@ -906,7 +967,7 @@ def main():
                     done = True
                     break
 
-                raw_or_text = invoke_model_with_retries(conn_obj, send_payload, is_generate_content=is_generate_content, max_retries=5)
+                raw_or_text = safe_invoke(conn_obj, send_payload, is_generate_content=is_generate_content, max_retries=5, prompt_text=prompt_text, request_text=initial_payload.get('request'), memory_obj=memory)
                 requests_made += 1
                 response = _ensure_structured(raw_or_text)
                 memory = response.get('memory', {})
@@ -950,7 +1011,7 @@ def main():
                 if is_generate_content:
                     json_text = json.dumps(aug_ask, ensure_ascii=False)
                     send_ask = {'contents': [{'parts': [{'text': json_text}]}]}
-                raw_or_text2 = invoke_model_with_retries(conn_obj, send_ask, is_generate_content=is_generate_content, max_retries=5)
+                raw_or_text2 = safe_invoke(conn_obj, send_ask, is_generate_content=is_generate_content, max_retries=5, prompt_text=prompt_text, request_text=initial_payload.get('request'), memory_obj=memory)
                 requests_made += 1
                 response = _ensure_structured(raw_or_text2)
                 memory = response.get('memory', {})

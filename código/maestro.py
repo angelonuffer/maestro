@@ -248,6 +248,27 @@ def get_file_tree(root: str) -> List[Dict[str, Any]]:
     return out
 
 
+def filter_file_tree(tree: List[Dict[str, Any]], allowed_exts: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    """Filtra a lista `tree` mantendo apenas arquivos com extensões em `allowed_exts`.
+
+    Por padrão, aceita apenas: .txt, .csv, .docx, .xlsx.
+    Retorna a lista filtrada (mesma estrutura de entrada).
+    """
+    if allowed_exts is None:
+        allowed_exts = ['.txt', '.csv', '.docx', '.xlsx']
+    allowed_set = set(e.lower() for e in allowed_exts)
+    filtered: List[Dict[str, Any]] = []
+    for e in tree:
+        p = e.get('path') or e.get('fullPath') or ''
+        ext = os.path.splitext(p)[1].lower()
+        if ext in allowed_set:
+            filtered.append(e)
+    removed = len(tree) - len(filtered)
+    if removed:
+        write_log(f"filter_file_tree: removed {removed} entries not matching allowed extensions {allowed_exts}")
+    return filtered
+
+
 def read_file_base64(path: str) -> Optional[str]:
     if not os.path.exists(path):
         return None
@@ -601,6 +622,8 @@ def main():
         allowed_root = config_dir
     write_log(f"Gerando árvore de arquivos em {allowed_root}")
     tree = get_file_tree(allowed_root)
+    # Filtrar a árvore para manter apenas formatos suportados (.txt, .csv, .docx, .xlsx)
+    tree = filter_file_tree(tree)
 
     orchestrator_text = ORCHESTRATOR_INSTRUCTIONS
 
